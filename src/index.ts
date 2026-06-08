@@ -23,9 +23,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-import { identifyFont, WfiApiError, type FontMatch } from "./client.js";
+import { identifyFont, WfiApiError, type FontMatch, type Quota } from "./client.js";
 
-const PKG_VERSION = "0.1.0";
+const PKG_VERSION = "0.2.0";
 
 // ── Config ────────────────────────────────────────────────────────────────
 const API_KEY = (process.env.WFI_API_KEY ?? "").trim();
@@ -87,7 +87,7 @@ async function main() {
       }
 
       try {
-        const results: FontMatch[] = await identifyFont({
+        const { results, quota } = await identifyFont({
           apiKey: API_KEY,
           baseUrl: BASE_URL,
           imageUrl: args.image_url,
@@ -99,7 +99,9 @@ async function main() {
             content: [
               {
                 type: "text" as const,
-                text: "No fonts matched this image. Try a clearer / higher-contrast crop, or pass a `text` hint with what's written.",
+                text:
+                  "No fonts matched this image. Try a clearer / higher-contrast crop, or pass a `text` hint with what's written." +
+                  renderQuotaFooter(quota),
               },
             ],
           };
@@ -111,7 +113,8 @@ async function main() {
               type: "text" as const,
               text:
                 `Found ${results.length} font matches (ordered by similarity):\n\n` +
-                renderResults(results),
+                renderResults(results) +
+                renderQuotaFooter(quota),
             },
           ],
         };
@@ -138,6 +141,21 @@ async function main() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+function renderQuotaFooter(quota: Quota | null): string {
+  // Compact one-line usage footer Claude can show inline. We append it
+  // after the results so the user always sees fresh quota numbers in
+  // the same response. Quota is null for legacy / unverified responses
+  // (when the backend doesn't emit the envelope) — skip the footer then.
+  if (!quota) return "";
+  const modeLabel = quota.mode === "paid" ? "PAID (credits)" : "FREE";
+  const pieces = [
+    `mode: ${modeLabel}`,
+    `today: ${quota.used_today}/${quota.limit}`,
+    `credits balance: ${quota.balance.toLocaleString()}`,
+  ];
+  return `\n\n_${pieces.join(" · ")}_`;
+}
 
 function renderResults(results: FontMatch[]): string {
   // Markdown-ish table that Claude renders nicely inline. We embed the

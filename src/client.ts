@@ -36,6 +36,20 @@ export interface FontMatch {
   site: string;
 }
 
+export interface Quota {
+  mode: "free" | "paid";
+  used_today: number;
+  limit: number;
+  free_remaining: number;
+  balance: number;
+  credits_per_usd: number;
+}
+
+export interface IdentifyResult {
+  results: FontMatch[];
+  quota: Quota | null; // null for legacy / non-MCP responses
+}
+
 export class WfiApiError extends Error {
   constructor(
     public readonly status: number,
@@ -53,7 +67,7 @@ export class WfiApiError extends Error {
  * Throws WfiApiError on non-200 responses with the parsed status code +
  * raw body so the tool handler can map known cases to friendly messages.
  */
-export async function identifyFont(opts: IdentifyOpts): Promise<FontMatch[]> {
+export async function identifyFont(opts: IdentifyOpts): Promise<IdentifyResult> {
   const { apiKey, baseUrl, imageUrl, imageBase64 } = opts;
 
   if (!imageUrl && !imageBase64) {
@@ -112,15 +126,27 @@ export async function identifyFont(opts: IdentifyOpts): Promise<FontMatch[]> {
     );
   }
 
-  if (!Array.isArray(parsed)) {
-    throw new WfiApiError(
-      res.status,
-      bodyText,
-      `Unexpected response shape — expected JSON array, got ${typeof parsed}`,
-    );
+  // Two valid shapes:
+  //   1. Bare array of FontMatch (legacy / non-MCP keys)
+  //   2. Envelope { results: FontMatch[], quota: {...} } (MCP keys)
+  // The MCP key path emits the envelope so the client can show usage info;
+  // every other key keeps the historical bare-array contract intact.
+  if (Array.isArray(parsed)) {
+    return { results: parsed as FontMatch[], quota: null };
+  }
+  if (
+    parsed && typeof parsed === "object" &&
+    Array.isArray((parsed as { results?: unknown }).results)
+  ) {
+    const obj = parsed as { results: FontMatch[]; quota?: Quota };
+    return { results: obj.results, quota: obj.quota ?? null };
   }
 
-  return parsed as FontMatch[];
+  throw new WfiApiError(
+    res.status,
+    bodyText,
+    `Unexpected response shape — expected array or {results,quota}, got ${typeof parsed}`,
+  );
 }
 
 function stripDataUriPrefix(b64: string): string {

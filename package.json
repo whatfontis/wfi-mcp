@@ -1,6 +1,6 @@
 {
   "name": "@whatfontis/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for WhatFontIs — identify fonts from images inside Claude Desktop, Claude Code, Cursor, and any other MCP-compatible AI client.",
   "type": "module",
   "main": "dist/index.js",
