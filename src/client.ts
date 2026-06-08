@@ -78,10 +78,14 @@ export async function identifyFont(opts: IdentifyOpts): Promise<IdentifyResult> 
   }
 
   // Build the legacy envelope the backend already understands.
+  // WANT_QUOTA=1 opts in to the v0.2.0+ envelope response shape
+  // ({results, quota}); v0.1.0 backends ignore the flag and return a
+  // bare array, which our parser still accepts.
   const envelope = {
     FONT: {
       API_KEY: apiKey,
       BASE64: imageBase64 ? 1 : 0,
+      WANT_QUOTA: 1,
       INFO: imageBase64
         ? { urlimagebase64: stripDataUriPrefix(imageBase64) }
         : { urlimage: imageUrl },
